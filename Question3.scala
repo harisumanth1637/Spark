@@ -1,6 +1,6 @@
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.rdd.RDD
-import scala.jdk.CollectionConverters._  // Java to Scala collection converter
+import scala.collection.JavaConverters._  // Correct import for Scala 2.12.x
 
 object TriadicClosureSparkHDFS {
 
@@ -61,12 +61,11 @@ object TriadicClosureSparkHDFS {
 
   def main(args: Array[String]): Unit = {
 
-    // Define HDFS paths for input and output
     val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example.txt"  // HDFS input file path
     val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder" // HDFS output folder path
 
     // Initialize Spark context
-    val conf = new SparkConf().setAppName("TriadicClosure").setMaster("local[*]") // Use all cores locally
+    val conf = new SparkConf().setAppName("TriadicClosure").setMaster("local[*]")  // Use all cores locally
     val sc = new SparkContext(conf)
 
     try {
