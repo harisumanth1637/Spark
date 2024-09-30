@@ -1,5 +1,6 @@
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.rdd.RDD
+import scala.jdk.CollectionConverters._  // Java to Scala collection converter
 
 object TriadicClosureSparkHDFS {
 
@@ -20,7 +21,8 @@ object TriadicClosureSparkHDFS {
 
   // Function to reduce phase: check if triadic closure is satisfied
   def reduceAndCheckTriadicClosure(friendPairs: RDD[(String, Iterable[Int])], friendsMap: RDD[(Int, List[Int])]): RDD[String] = {
-    val friendsMapCollected = friendsMap.collectAsMap() // Collect the friend map to check direct connections locally
+    // Collect the friend map to check direct connections locally
+    val friendsMapCollected = friendsMap.collectAsMap().asScala.toMap
 
     friendPairs.flatMap { case (pair, mutualFriends) =>
       val friends = pair.split(",")
@@ -29,9 +31,9 @@ object TriadicClosureSparkHDFS {
 
       // Check if B and C are directly connected
       if (!areDirectFriends(friendB, friendC, friendsMapCollected)) {
-         List(s"Triadic closure not satisfied for pair ($friendB, $friendC) with mutual friends: ${mutualFriends.mkString(", ")}")    
-           } else {
-        List.empty[String]
+        List(s"Triadic closure not satisfied for pair ($friendB, $friendC) with mutual friends: ${mutualFriends.mkString(", ")}")
+      } else {
+        List.empty[String]  // No output if closure is satisfied
       }
     }
   }
@@ -59,28 +61,37 @@ object TriadicClosureSparkHDFS {
 
   def main(args: Array[String]): Unit = {
 
-
+    // Define HDFS paths for input and output
     val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example.txt"  // HDFS input file path
     val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder" // HDFS output folder path
 
     // Initialize Spark context
-    val conf = new SparkConf().setAppName("TriadicClosure").setMaster("local")
+    val conf = new SparkConf().setAppName("TriadicClosure").setMaster("local[*]") // Use all cores locally
     val sc = new SparkContext(conf)
 
-    // Step 1: Read friends data from HDFS as RDD
-    val friendsMapRDD = readFriendsMapFromFile(sc, inputHDFS)
+    try {
+      // Step 1: Read friends data from HDFS as RDD
+      val friendsMapRDD = readFriendsMapFromFile(sc, inputHDFS)
 
-    // Step 2: Map Phase - Create pairs of friends and record mutual friends
-    val friendPairsRDD = mapPairsOfFriends(friendsMapRDD)
-      .groupByKey() // Group by pair to collect all mutual friends
+      // Step 2: Map Phase - Create pairs of friends and record mutual friends
+      val friendPairsRDD = mapPairsOfFriends(friendsMapRDD)
+        .groupByKey() // Group by pair to collect all mutual friends
 
-    // Step 3: Reduce Phase - Check for triadic closure and save unsatisfied trios
-    val unsatisfiedTrios = reduceAndCheckTriadicClosure(friendPairsRDD, friendsMapRDD)
+      // Step 3: Reduce Phase - Check for triadic closure and save unsatisfied trios
+      val unsatisfiedTrios = reduceAndCheckTriadicClosure(friendPairsRDD, friendsMapRDD)
 
-    // Save the output back to HDFS
-    unsatisfiedTrios.saveAsTextFile(outputHDFS)
+      // Save the output back to HDFS
+      unsatisfiedTrios.saveAsTextFile(outputHDFS)
+      
+      println(s"Job completed successfully. Results saved to $outputHDFS")
 
-    // Stop the Spark context
-    sc.stop()
+    } catch {
+      case e: Exception =>
+        println(s"Error during Spark execution: ${e.getMessage}")
+        e.printStackTrace()
+    } finally {
+      // Stop the Spark context
+      sc.stop()
+    }
   }
 }
