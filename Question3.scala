@@ -29,9 +29,9 @@ object TriadicClosureSparkHDFS {
 
       // Check if B and C are directly connected
       if (!areDirectFriends(friendB, friendC, friendsMapCollected)) {
-        Some(s"Triadic closure not satisfied for pair ($friendB, $friendC) with mutual friends: ${mutualFriends.mkString(", ")}")
-      } else {
-        None
+         List(s"Triadic closure not satisfied for pair ($friendB, $friendC) with mutual friends: ${mutualFriends.mkString(", ")}")    
+           } else {
+        List.empty[String]
       }
     }
   }
