@@ -18,28 +18,29 @@ object TriadicClosureSparkHDFS {
     }
   }
 
-  // Function to reduce phase: check if triadic closure is satisfied
+  // Function to reduce phase: check if triadic closure is satisfied using RDDs
   def reduceAndCheckTriadicClosure(friendPairs: RDD[(String, Iterable[Int])], friendsMap: RDD[(Int, List[Int])]): RDD[String] = {
-    // Collect the friend map to check direct connections locally
-    val friendsMapCollected: Map[Int, List[Int]] = convertJavaMapToScala(friendsMap.collectAsMap())
+    // Flatten friendsMap so that we can check direct friendships
+    val directFriendships: RDD[(Int, Int)] = friendsMap.flatMap { case (user, friends) =>
+      friends.map(friend => (user, friend))
+    }
 
     friendPairs.flatMap { case (pair, mutualFriends) =>
       val friends = pair.split(",")
       val friendB = friends(0).toInt
       val friendC = friends(1).toInt
 
-      // Check if B and C are directly connected
-      if (!areDirectFriends(friendB, friendC, friendsMapCollected)) {
+      // Check if B and C are directly connected using the directFriendships RDD
+      val isDirectlyConnected = directFriendships.filter {
+        case (userA, userB) => (userA == friendB && userB == friendC) || (userA == friendC && userB == friendB)
+      }.isEmpty() // True if there is no direct connection
+
+      if (isDirectlyConnected) {
         List(s"Triadic closure not satisfied for pair ($friendB, $friendC) with mutual friends: ${mutualFriends.mkString(", ")}")
       } else {
         List.empty[String]  // No output if closure is satisfied
       }
     }
-  }
-
-  // Helper function to check if two users are direct friends
-  def areDirectFriends(userA: Int, userB: Int, friendsMap: Map[Int, List[Int]]): Boolean = {
-    friendsMap.get(userA).exists(_.contains(userB))
   }
 
   // Helper function to create a sorted key for a pair of friends
@@ -56,22 +57,6 @@ object TriadicClosureSparkHDFS {
         val friends = parts(1).split(",").map(_.trim.toInt).toList
         (user, friends)
       }
-  }
-
-  // Function to manually convert the Java map to Scala immutable map
-  def convertJavaMapToScala(javaMap: java.util.Map[Int, java.util.List[Int]]): Map[Int, List[Int]] = {
-    import scala.collection.mutable
-    val scalaMap = mutable.Map[Int, List[Int]]()
-    val javaIterator = javaMap.entrySet().iterator()
-
-    while (javaIterator.hasNext) {
-      val entry = javaIterator.next()
-      val key = entry.getKey
-      val value = entry.getValue.toArray().map(_.asInstanceOf[Int]).toList
-      scalaMap.put(key, value)
-    }
-
-    scalaMap.toMap  // Convert the mutable map to an immutable one
   }
 
   def main(args: Array[String]): Unit = {
