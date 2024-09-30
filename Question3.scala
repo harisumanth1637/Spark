@@ -1,6 +1,5 @@
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.rdd.RDD
-import scala.collection.JavaConverters._  // Correct import for Scala 2.12.x
 
 object TriadicClosureSparkHDFS {
 
@@ -22,7 +21,7 @@ object TriadicClosureSparkHDFS {
   // Function to reduce phase: check if triadic closure is satisfied
   def reduceAndCheckTriadicClosure(friendPairs: RDD[(String, Iterable[Int])], friendsMap: RDD[(Int, List[Int])]): RDD[String] = {
     // Collect the friend map to check direct connections locally
-    val friendsMapCollected = friendsMap.collectAsMap().asScala.toMap
+    val friendsMapCollected: Map[Int, List[Int]] = convertJavaMapToScala(friendsMap.collectAsMap())
 
     friendPairs.flatMap { case (pair, mutualFriends) =>
       val friends = pair.split(",")
@@ -57,6 +56,22 @@ object TriadicClosureSparkHDFS {
         val friends = parts(1).split(",").map(_.trim.toInt).toList
         (user, friends)
       }
+  }
+
+  // Function to manually convert the Java map to Scala immutable map
+  def convertJavaMapToScala(javaMap: java.util.Map[Int, java.util.List[Int]]): Map[Int, List[Int]] = {
+    import scala.collection.mutable
+    val scalaMap = mutable.Map[Int, List[Int]]()
+    val javaIterator = javaMap.entrySet().iterator()
+
+    while (javaIterator.hasNext) {
+      val entry = javaIterator.next()
+      val key = entry.getKey
+      val value = entry.getValue.toArray().map(_.asInstanceOf[Int]).toList
+      scalaMap.put(key, value)
+    }
+
+    scalaMap.toMap  // Convert the mutable map to an immutable one
   }
 
   def main(args: Array[String]): Unit = {
