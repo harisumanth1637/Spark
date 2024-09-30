@@ -58,13 +58,10 @@ object TriadicClosureSparkHDFS {
   }
 
   def main(args: Array[String]): Unit = {
-    if (args.length != 2) {
-      println("Usage: TriadicClosureSparkHDFS <input_hdfs_file> <output_hdfs_folder>")
-      return
-    }
 
-    val inputHDFS = args(0)  // HDFS input file path
-    val outputHDFS = args(1) // HDFS output folder path
+
+    val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example.txt"  // HDFS input file path
+    val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder" // HDFS output folder path
 
     // Initialize Spark context
     val conf = new SparkConf().setAppName("TriadicClosure").setMaster("local")
