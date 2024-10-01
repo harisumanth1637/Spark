@@ -39,43 +39,37 @@ try {
   // Step 5: Group the pairs by key to collect all mutual friends for each pair
   val groupedFriendPairs: RDD[(String, Iterable[Int])] = friendPairsRDD.groupByKey()
 
-  // Step 6: Flatten and collect direct friendship pairs as tuples (friendA, friendB)
-  val directFriendshipsMap = friendsMapRDD.flatMap { case (user, friends) =>
-    friends.map(friend => (user, friend))
-  }.collectAsMap()
+  // Step 6: Flatten and collect direct friendship pairs as tuples (friendA, List(friendB))
+  val directFriendshipsMap = friendsMapRDD.collectAsMap()
 
   // Broadcast the direct friendship pairs as a map
   val directFriendshipsBroadcast = sc.broadcast(directFriendshipsMap)
 
   // Step 7: Check if the pairs are directly connected or not (triadic closure check)
-// Step 7: Check if the pairs are directly connected or not (triadic closure check)
-// Step 7: Check if the pairs are directly connected or not (triadic closure check)
-val unsatisfiedTrios: RDD[String] = groupedFriendPairs.flatMap { case (pair, mutualFriends) =>
-  val friends = pair.split(",")
-  val friendB = friends(0).toInt
-  val friendC = friends(1).toInt
+  val unsatisfiedTrios: RDD[String] = groupedFriendPairs.flatMap { case (pair, mutualFriends) =>
+    val friends = pair.split(",")
+    val friendB = friends(0).toInt
+    val friendC = friends(1).toInt
 
-  // Check if either (friendB -> friendC) or (friendC -> friendB) exists in the direct friendships map
-  val isDirectlyConnected = {
-    directFriendshipsBroadcast.value.get(friendB) match {
-      case Some(friendsList) => friendsList.contains(friendC)
-      case None => false
+    // Check if either (friendB -> friendC) or (friendC -> friendB) exists in the direct friendships map
+    val isDirectlyConnected = {
+      directFriendshipsBroadcast.value.get(friendB) match {
+        case Some(friendsList) => friendsList.contains(friendC)
+        case None => false
+      }
+    } || {
+      directFriendshipsBroadcast.value.get(friendC) match {
+        case Some(friendsList) => friendsList.contains(friendB)
+        case None => false
+      }
     }
-  } || {
-    directFriendshipsBroadcast.value.get(friendC) match {
-      case Some(friendsList) => friendsList.contains(friendB)
-      case None => false
+
+    if (!isDirectlyConnected) {
+      Some(s"Triadic closure not satisfied for pair ($friendB, $friendC) with mutual friends: ${mutualFriends.mkString(", ")}")
+    } else {
+      None
     }
   }
-
-  if (!isDirectlyConnected) {
-    Some(s"Triadic closure not satisfied for pair ($friendB, $friendC) with mutual friends: ${mutualFriends.mkString(", ")}")
-  } else {
-    None
-  }
-}
-
-
 
   // Step 8: Collect the final results (with Spark context still active)
   val unsatisfiedTriosCollected: Array[String] = unsatisfiedTrios.collect()
