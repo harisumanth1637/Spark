@@ -53,7 +53,6 @@ val unsatisfiedTrios: RDD[String] = groupedFriendPairs.flatMap { case (pair, mut
   val friends = pair.split(",")
   val friendB = friends(0).toInt
   val friendC = friends(1).toInt
-
   // Check if either (friendB -> friendC) or (friendC -> friendB) exists in the direct friendships map
   val isDirectlyConnected = directFriendshipsBroadcast.value.get(friendB) match {
     case Some(friendsList) => friendsList.contains(friendC)
@@ -62,7 +61,6 @@ val unsatisfiedTrios: RDD[String] = groupedFriendPairs.flatMap { case (pair, mut
     case Some(friendsList) => friendsList.contains(friendB)
     case None => false
   }
-
   if (!isDirectlyConnected) {
     Some(s"Triadic closure not satisfied for pair ($friendB, $friendC) with mutual friends: ${mutualFriends.mkString(", ")}")
   } else {
