@@ -8,13 +8,18 @@ val sc = new SparkContext(conf)
 val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example.txt"  // HDFS input file path
 val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder"  // HDFS output folder path
 
-// Step 1: Read friends data from HDFS as RDD
+// Step 1: Read and load friends data from HDFS using flatMap and then map
 val friendsMapRDD: RDD[(Int, List[Int])] = sc.textFile(inputHDFS)
+  .flatMap(line => line.split("\n"))  // Split by lines if there are multiple lines
   .map { line =>
-    val parts = line.split("\t")
+    val parts = line.split("\t")  // Assuming tab-separated user and friend list
     val user = parts(0).trim.toInt
-    val friends = parts(1).split(",").map(_.trim.toInt).toList
-    (user, friends)
+    val friends = if (parts.length > 1) {
+      parts(1).split(",").map(_.trim.toInt).toList
+    } else {
+      List[Int]() // Handle case where a user has no friends
+    }
+    (user, friends)  // Return as a tuple (user, list of friends)
   }
 
 // Step 2: Create pairs of friends for each user and record mutual friends
@@ -30,7 +35,7 @@ val friendPairsRDD: RDD[(String, Int)] = friendsMapRDD.flatMap { case (userA, fr
   }
 }.groupByKey() // Group by pair to collect all mutual friends
 
-// Step 3: Create a direct friendships RDD for later checking
+// Step 3: Create a direct friendships RDD for checking later
 val directFriendships: RDD[(Int, Int)] = friendsMapRDD.flatMap { case (user, friends) =>
   friends.map(friend => (user, friend))
 }
