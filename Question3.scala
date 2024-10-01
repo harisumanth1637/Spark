@@ -7,8 +7,8 @@ val sc = new SparkContext(conf)
 
 try {
   // Define input and output HDFS paths
-  val inputHDFS = "hdfs://localhost:9000/user/gs37r/InputFolder/input1.txt"
-  val outputHDFS = "hdfs://localhost:9000/user/gs37r/OutputFolder"
+  val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example.txt"
+  val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder"
 
   // Step 1: Load the input file from HDFS
   val loadfile: RDD[String] = sc.textFile(inputHDFS)
@@ -39,11 +39,12 @@ try {
   // Step 5: Group the pairs by key to collect all mutual friends for each pair
   val groupedFriendPairs: RDD[(String, Iterable[Int])] = friendPairsRDD.groupByKey()
 
-  // Step 6: Collect and broadcast the direct friendship pairs as a map
+  // Step 6: Flatten and collect direct friendship pairs as tuples (friendA, friendB)
   val directFriendshipsMap = friendsMapRDD.flatMap { case (user, friends) =>
     friends.map(friend => (user, friend))
   }.collectAsMap()
 
+  // Broadcast the direct friendship pairs as a map
   val directFriendshipsBroadcast = sc.broadcast(directFriendshipsMap)
 
   // Step 7: Check if the pairs are directly connected or not (triadic closure check)
@@ -52,11 +53,9 @@ try {
     val friendB = friends(0).toInt
     val friendC = friends(1).toInt
 
-    // Use the broadcasted direct friendship map
-    val isDirectlyConnected = directFriendshipsBroadcast.value.get(friendB) match {
-      case Some(directFriends) => directFriends.contains(friendC)
-      case None => false
-    }
+    // Check if either (friendB, friendC) or (friendC, friendB) exists in the direct friendships map
+    val isDirectlyConnected = directFriendshipsBroadcast.value.contains((friendB, friendC)) ||
+                              directFriendshipsBroadcast.value.contains((friendC, friendB))
 
     if (!isDirectlyConnected) {
       Some(s"Triadic closure not satisfied for pair ($friendB, $friendC) with mutual friends: ${mutualFriends.mkString(", ")}")
