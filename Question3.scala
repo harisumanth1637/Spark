@@ -6,8 +6,8 @@ val conf = new SparkConf().setAppName("TriadicClosure").setMaster("local[*]")
 val sc = new SparkContext(conf)
 
 // Define input and output HDFS paths
-val inputHDFS = "hdfs://localhost:9000/user/gs37r/InputFolder/input1.txt"
-val outputHDFS = "hdfs://localhost:9000/user/gs37r/OutputFolder"
+val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example.txt"
+val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder"
 
 // Step 1: Load the input file from HDFS
 val loadfile: RDD[String] = sc.textFile(inputHDFS)
