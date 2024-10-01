@@ -1,5 +1,6 @@
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.rdd.RDD
+import scala.collection.mutable.ListBuffer
 
 // Initialize Spark context
 val conf = new SparkConf().setAppName("TriadicClosure").setMaster("local[*]")
@@ -7,8 +8,8 @@ val sc = new SparkContext(conf)
 
 try {
   // Define input and output HDFS paths
-  val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example.txt"
-  val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder"
+  val inputHDFS = "hdfs://localhost:9000/user/gs37r/InputFolder/input1.txt"
+  val outputHDFS = "hdfs://localhost:9000/user/gs37r/OutputFolder"
 
   // Step 1: Load the input file from HDFS
   val loadfile: RDD[String] = sc.textFile(inputHDFS)
@@ -23,27 +24,27 @@ try {
     (user, friends)
   }
 
-  // Step 4: Create pairs of friends for each user
+  // Step 4: Broadcast the direct friendships map
+  val directFriendshipsMap = friendsMapRDD.collectAsMap()
+  val directFriendshipsBroadcast = sc.broadcast(directFriendshipsMap)
+
+  // Step 5: Create pairs of friends for each user
   val friendPairsRDD: RDD[(String, Int)] = friendsMapRDD.flatMap { case (userA, friends) =>
+    val pairs = ListBuffer[(String, Int)]()
     for {
       i <- friends.indices
       j <- i + 1 until friends.length
-    } yield {
+    } {
       val friendB = friends(i)
       val friendC = friends(j)
       val pair = if (friendB < friendC) s"$friendB,$friendC" else s"$friendC,$friendB"
-      (pair, userA) // Return the pair and the user as the mutual friend
+      pairs += ((pair, userA)) // Return the pair and the user as the mutual friend
     }
+    pairs
   }
 
-  // Step 5: Group the pairs by key to collect all mutual friends for each pair
+  // Step 6: Group the pairs by key to collect all mutual friends for each pair
   val groupedFriendPairs: RDD[(String, Iterable[Int])] = friendPairsRDD.groupByKey()
-
-  // Step 6: Flatten and collect direct friendship pairs as tuples (friendA, List(friendB))
-  val directFriendshipsMap = friendsMapRDD.collectAsMap()
-
-  // Broadcast the direct friendship pairs as a map
-  val directFriendshipsBroadcast = sc.broadcast(directFriendshipsMap)
 
   // Step 7: Check if the pairs are directly connected or not (triadic closure check)
   val unsatisfiedTrios: RDD[String] = groupedFriendPairs.flatMap { case (pair, mutualFriends) =>
@@ -51,7 +52,7 @@ try {
     val friendB = friends(0).toInt
     val friendC = friends(1).toInt
 
-    // Check if either (friendB -> friendC) or (friendC -> friendB) exists in the direct friendships map
+    // Use the broadcasted direct friendship map to check if they are directly connected
     val isDirectlyConnected = {
       directFriendshipsBroadcast.value.get(friendB) match {
         case Some(friendsList) => friendsList.contains(friendC)
