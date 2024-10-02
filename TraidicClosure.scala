@@ -9,8 +9,8 @@ object TriadicClosureApp {
     val sc = new SparkContext(conf)
 
     // Hardcoded input and output paths
-    val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example.txt"
-    val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder"
+    val inputHDFS = "hdfs://localhost:9000/user/gs37r/InputFolder/input1.txt"
+    val outputHDFS = "hdfs://localhost:9000/user/gs37r/OutputFolder"
 
     // Step 1: Read input data from HDFS
     val loadfile = sc.textFile(inputHDFS)
@@ -26,6 +26,10 @@ object TriadicClosureApp {
         None
       }
     }
+
+    // Broadcast the userFriendsRDD as a map so that it can be accessed in transformations
+    val userFriendsMap = userFriendsRDD.collectAsMap()
+    val broadcastFriendsMap = sc.broadcast(userFriendsMap)
 
     // Step 3: Generate pairs of friends (B, C) and associate the user (A) as the mutual friend
     val friendPairsRDD = userFriendsRDD.flatMap { case (userA, friends) =>
@@ -49,12 +53,14 @@ object TriadicClosureApp {
       val friendB = friends(0).toInt
       val friendC = friends(1).toInt
 
-      // Check if B and C are directly connected by looking into the global user-friends network
-      val isDirectlyConnected = userFriendsRDD.filter { case (user, friendsOfUser) =>
-        (user == friendB && friendsOfUser.contains(friendC)) || (user == friendC && friendsOfUser.contains(friendB))
-      }.isEmpty()  // True if no direct connection exists between B and C
+      // Access the broadcasted map
+      val friendsMap = broadcastFriendsMap.value
 
-      if (isDirectlyConnected) {
+      // Check if B and C are directly connected
+      val friendsOfB = friendsMap.getOrElse(friendB, List())
+      val isDirectlyConnected = friendsOfB.contains(friendC)
+
+      if (!isDirectlyConnected) {
         Some(s"($mutualFriends.mkString(", "), $friendB, $friendC) -> Triadic closure not satisfied ($friendB and $friendC are not connected)")
       } else {
         None
