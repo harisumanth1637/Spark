@@ -28,8 +28,8 @@ val userFriendsRDD: RDD[(String, Set[String])] = loadfile.map { line =>
 }
 println("Parsed user friends data")
 
-// Step 3: Collect the user-friends map and broadcast it
-val userFriendsMap = userFriendsRDD.collectAsMap()
+// Step 3: Collect the user-friends map and broadcast it (convert to immutable Map)
+val userFriendsMap = userFriendsRDD.collectAsMap().toMap // Convert to immutable map
 val userFriendsBroadcast = sc.broadcast(userFriendsMap)
 println("Broadcasted user friends map")
 
