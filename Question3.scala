@@ -12,10 +12,13 @@ object MutualFriendsApp {
 
   def main(args: Array[String]): Unit = {
 
-    val startTime = System.nanoTime()
+    // Start time in milliseconds
+    val startTime = System.currentTimeMillis()
 
+    // Load the input file from HDFS
     val loadfile: RDD[String] = sc.textFile(inputHDFS)
 
+    // Parse input file and create an RDD of (user, Set[friends])
     val userFriendsRDD: RDD[(String, Set[String])] = loadfile.flatMap { line =>
       val parts = line.split("\t")
       if (parts.length == 2) {
@@ -31,13 +34,16 @@ object MutualFriendsApp {
       }
     }
 
+    // Collect userFriendsRDD as a map and broadcast it
     val userFriendsMap = userFriendsRDD.collectAsMap().toMap
     val userFriendsBroadcast = sc.broadcast(userFriendsMap)
 
+    // Function to generate sorted user pair keys
     def generateUserPairKey(userA: String, userB: String): String = {
       if (userA < userB) s"$userA,$userB" else s"$userB,$userA"
     }
 
+    // Function to compute mutual friends between two users
     def computeMutualFriends(friendsOfA: Set[String], userB: String): Set[String] = {
       val userFriendsMapBroadcast = userFriendsBroadcast.value
       val friendsOfB = userFriendsMapBroadcast.getOrElse(userB, Set.empty)
@@ -45,6 +51,7 @@ object MutualFriendsApp {
       mutualFriends - userB
     }
 
+    // Generate user pairs and compute mutual friends for each pair
     val mutualFriendsPairsRDD: RDD[(String, Set[String])] = userFriendsRDD.flatMap { case (userA, friendsOfA) =>
       val pairs = ListBuffer[(String, Set[String])]()
       for (userB <- friendsOfA) {
@@ -57,8 +64,10 @@ object MutualFriendsApp {
       pairs
     }
 
+    // Aggregate mutual friends for each pair
     val aggregatedMutualFriends: RDD[(String, Set[String])] = mutualFriendsPairsRDD.reduceByKey(_ ++ _)
 
+    // Count the mutual friends for each user
     val userMutualFriendsCountRDD: RDD[(String, Int)] = aggregatedMutualFriends.flatMap { case (pair, mutualFriends) =>
       val users = pair.split(",")
       val userA = users(0)
@@ -67,28 +76,31 @@ object MutualFriendsApp {
       Seq((userA, mutualFriendsCount), (userB, mutualFriendsCount))
     }.reduceByKey(_ + _)
 
+    // Get top 10 users with the highest mutual friends
     val topUsers: Array[(String, Int)] = userMutualFriendsCountRDD
       .sortBy(_._2, ascending = false)
       .take(10)
 
-    // Print topUsers to console
+    // Print top 10 users to the console
     println("\nTop Users with the Highest Mutual Friends:")
     topUsers.zipWithIndex.foreach { case ((user, count), rank) =>
       println(s"Rank ${rank + 1}: User $user ($count mutual friends)")
     }
 
-    // Save topUsers to outputHDFS
+    // Save the top 10 users to HDFS as a single file
     val topUsersRDD: RDD[String] = sc.parallelize(topUsers.map { case (user, count) =>
       s"User $user: $count mutual friends"
     })
-
     topUsersRDD.coalesce(1).saveAsTextFile(outputHDFS)
 
-    // End time measurement
-    val endTime = System.nanoTime()
-    val duration = (endTime - startTime) / 1e9d
-    println(s"Task completed in $duration seconds")
+    // End time in milliseconds
+    val endTime = System.currentTimeMillis()
+    
+    // Calculate and print duration in milliseconds
+    val duration = endTime - startTime
+    println(s"Task completed in $duration milliseconds")
 
+    // Stop the Spark context
     sc.stop()
   }
 }
