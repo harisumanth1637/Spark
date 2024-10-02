@@ -1,9 +1,10 @@
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.rdd.RDD
+import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
 // Initialize Spark context
-val conf = new SparkConf().setAppName("TriadicClosure").setMaster("local[*]")
+val conf = new SparkConf().setAppName("MutualFriendsMapReduce").setMaster("local[*]")
 val sc = new SparkContext(conf)
 
 println("Spark context initialized")
@@ -19,74 +20,71 @@ println(s"Output path: $outputHDFS")
 val loadfile: RDD[String] = sc.textFile(inputHDFS)
 println("Loaded input file from HDFS")
 
-// Step 2: Split the lines into user and friends (Assume the file contains lines like: "1 2,3,4")
-val splitLines: RDD[Array[String]] = loadfile.map(line => line.split("\t"))
-println("Split the input lines")
-
-// Step 3: Map each line to a (user, List(friends)) pair
-val friendsMapRDD: RDD[(Int, List[Int])] = splitLines.map { parts =>
-  val user = parts(0).trim.toInt
-  val friends = parts(1).split(",").map(_.trim.toInt).toList
+// Step 2: Parse the input data into a (user -> friends) RDD
+val userFriendsRDD: RDD[(String, Set[String])] = loadfile.map { line =>
+  val parts = line.split("\t")
+  val user = parts(0)
+  val friends = parts(1).split(",").toSet
   (user, friends)
 }
-println("Mapped users to their friends list")
+println("Parsed user friends data")
 
-// Step 4: Create a direct friendship RDD where each pair of friends (user, friend) is represented as (userA, userB)
-val directFriendshipsRDD: RDD[(Int, Int)] = friendsMapRDD.flatMap { case (user, friends) =>
-  friends.map(friend => (user, friend)) // Create a (user, friend) pair for each friendship
-}
-println("Created direct friendship pairs")
+// Step 3: Create user pairs and compute mutual friends
+val mutualFriendsPairsRDD: RDD[(String, Set[String])] = userFriendsRDD.flatMap { case (userA, friendsOfA) =>
+  val pairs = ListBuffer[(String, Set[String])]()
+  
+  // Create user pairs and calculate mutual friends
+  for (userB <- friendsOfA) {
+    // Ensure A < B for consistent ordering of user pairs
+    val userPairKey = if (userA < userB) s"$userA,$userB" else s"$userB,$userA"
+    val mutualFriends = friendsOfA intersect userFriendsRDD.lookup(userB).headOption.getOrElse(Set.empty)
+    
+    // Remove self from mutual friends
+    val cleanedMutualFriends = mutualFriends - userA - userB
 
-// Step 5: Create pairs of friends for each user
-val friendPairsRDD: RDD[(String, Int)] = friendsMapRDD.flatMap { case (userA, friends) =>
-  val pairs = ListBuffer[(String, Int)]()
-  for {
-    i <- friends.indices
-    j <- i + 1 until friends.length
-  } {
-    val friendB = friends(i)
-    val friendC = friends(j)
-    val pair = if (friendB < friendC) s"$friendB,$friendC" else s"$friendC,$friendB"
-    pairs += ((pair, userA)) // Return the pair and the user as the mutual friend
+    if (cleanedMutualFriends.nonEmpty) {
+      pairs += ((userPairKey, cleanedMutualFriends))
+    }
   }
   pairs
 }
-println("Created friend pairs for each user")
+println("Computed mutual friends for user pairs")
 
-// Step 6: Group the pairs by key to collect all mutual friends for each pair
-val groupedFriendPairs: RDD[(String, Iterable[Int])] = friendPairsRDD.groupByKey()
-println("Grouped friend pairs by key")
+// Step 4: Aggregate mutual friends for each user pair
+val aggregatedMutualFriends: RDD[(String, Set[String])] = mutualFriendsPairsRDD.reduceByKey(_ ++ _)
+println("Aggregated mutual friends for each user pair")
 
-// Step 7: Use a self-join on the directFriendshipsRDD to check if the pair is directly connected
-val unsatisfiedTrios: RDD[String] = groupedFriendPairs.flatMap { case (pair, mutualFriends) =>
-  val friends = pair.split(",")
-  val friendB = friends(0).toInt
-  val friendC = friends(1).toInt
-
-  // Check if there is a direct connection between friendB and friendC
-  val directConnection = directFriendshipsRDD
-    .filter { case (userA, userB) => (userA == friendB && userB == friendC) || (userA == friendC && userB == friendB) }
-    .isEmpty()
-
-  if (directConnection) {
-    Some(s"Triadic closure not satisfied for pair ($friendB, $friendC) with mutual friends: ${mutualFriends.mkString(", ")}")
-  } else {
-    None
-  }
+// Step 5: Output the mutual friends result
+println("Map Output (Mutual Friends):")
+aggregatedMutualFriends.collect().foreach { case (pair, mutualFriends) =>
+  println(s"$pair -> ${mutualFriends.mkString(", ")}")
 }
-println("Checked for triadic closure")
 
-// Step 8: Collect the final results (with Spark context still active)
-val unsatisfiedTriosCollected: Array[String] = unsatisfiedTrios.collect()
-println("Collected unsatisfied triadic closures")
+// Step 6: Compute the top users based on mutual friend count
+val userMutualFriendsCountRDD: RDD[(String, Int)] = aggregatedMutualFriends.flatMap { case (pair, mutualFriends) =>
+  val users = pair.split(",")
+  val userA = users(0)
+  val userB = users(1)
+  val mutualFriendsCount = mutualFriends.size
+  Seq((userA, mutualFriendsCount), (userB, mutualFriendsCount))
+}
+  .reduceByKey(_ + _)
+println("Computed mutual friends count for each user")
 
-// Step 9: Print the unsatisfied triadic closures
-unsatisfiedTriosCollected.foreach(println)
+// Step 7: Sort the users by mutual friends count in descending order and get the top 10
+val topUsers: Array[(String, Int)] = userMutualFriendsCountRDD
+  .sortBy(_._2, ascending = false)
+  .take(10)
 
-// Step 10: Save the results to HDFS
-unsatisfiedTrios.saveAsTextFile(outputHDFS)
-println(s"Saved the results to $outputHDFS")
+println("\nTop Users with the Highest Mutual Friends:")
+topUsers.zipWithIndex.foreach { case ((user, count), rank) =>
+  println(s"Rank ${rank + 1}: User $user ($count mutual friends)")
+}
 
-// Step 11: Stop the Spark context at the end
+// Step 8: Save the results to HDFS
+aggregatedMutualFriends.saveAsTextFile(outputHDFS)
+println(s"Results saved to $outputHDFS")
+
+// Step 9: Stop the Spark context
 sc.stop()
 println("Spark context stopped")
