@@ -8,8 +8,8 @@ object MutualFriendsApp extends App {
 
 class MutualFriends {
 
-  val inputHDFS = "hdfs://localhost:9000/user/gs37r/InputFolder/input1.txt"
-  val outputHDFS = "hdfs://localhost:9000/user/gs37r/OutputFolder"
+  val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/soc-LiveJournal1Adj.txt"
+  val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder"
 
   val conf = new SparkConf().setAppName("MutualFriendsMapReduce").setMaster("local[*]")
   val sc = new SparkContext(conf)
