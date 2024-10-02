@@ -2,19 +2,15 @@ import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.rdd.RDD
 import scala.collection.mutable.ListBuffer
 
-object MutualFriendsApp extends App {
-  new MutualFriends().doIT
-}
+object MutualFriendsApp {
 
-class MutualFriends {
-
-  val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/soc-LiveJournal1Adj.txt"
+  val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/input1.txt"
   val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder"
 
   val conf = new SparkConf().setAppName("MutualFriendsMapReduce").setMaster("local[*]")
   val sc = new SparkContext(conf)
 
-  def doIT = {
+  def main(args: Array[String]): Unit = {
 
     val loadfile: RDD[String] = sc.textFile(inputHDFS)
 
