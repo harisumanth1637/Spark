@@ -8,6 +8,9 @@ object TriadicClosureApp {
     val conf = new SparkConf().setAppName("TriadicClosure").setMaster("local[*]")
     val sc = new SparkContext(conf)
 
+    // Record start time in milliseconds
+    val startTime = System.currentTimeMillis()
+
     // Hardcoded input and output paths
     val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example.txt"
     val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder"
@@ -61,7 +64,6 @@ object TriadicClosureApp {
       val isDirectlyConnected = friendsOfB.contains(friendC)
 
       if (!isDirectlyConnected) {
-        // Correct the output formatting here
         Some(s"(${mutualFriends.mkString(", ")}, $friendB, $friendC) -> Triadic closure not satisfied ($friendB and $friendC are not connected)")
       } else {
         None
@@ -74,6 +76,13 @@ object TriadicClosureApp {
 
     // Step 7: Save the output to HDFS
     sc.parallelize(results).coalesce(1).saveAsTextFile(outputHDFS)
+
+    // Record end time in milliseconds
+    val endTime = System.currentTimeMillis()
+
+    // Calculate and print the duration
+    val duration = endTime - startTime
+    println(s"Task completed in $duration milliseconds")
 
     // Stop the Spark Context
     sc.stop()
