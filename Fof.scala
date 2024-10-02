@@ -49,6 +49,7 @@ object FriendsRecommendationApp {
       val potentialFriendsList = filteredFriends.toList.sorted.mkString(",")
       s"$person\t$potentialFriendsList"
     }
+    outputRDD.foreach(println)
 
     // Step 5: Save the output to HDFS
     outputRDD.coalesce(1).saveAsTextFile(outputHDFS)
