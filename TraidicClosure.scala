@@ -33,6 +33,10 @@ object TriadicClosureApp {
       }
     }
 
+    // Add a print to ensure the data is correctly parsed
+    println("Parsed userFriendsRDD:")
+    userFriendsRDD.take(10).foreach(println)
+
     // Function to generate sorted user pair key
     def createSortedKey(friendA: Int, friendB: Int): String = {
       if (friendA < friendB) s"$friendA,$friendB" else s"$friendB,$friendA"
@@ -51,8 +55,16 @@ object TriadicClosureApp {
       }
     }
 
+    // Add a print to check if pairs are being generated correctly
+    println("Generated friendPairsRDD:")
+    friendPairsRDD.take(10).foreach(println)
+
     // Group by friend pairs and find mutual friends
     val mutualFriendsRDD: RDD[(String, Iterable[(Int, List[Int])])] = friendPairsRDD.groupByKey()
+
+    // Add a print to check if grouping is working
+    println("Grouped mutualFriendsRDD:")
+    mutualFriendsRDD.take(10).foreach(println)
 
     // Check for triadic closure by ensuring mutual friends are also directly connected
     val triadicClosureRDD: RDD[String] = mutualFriendsRDD.flatMap { case (pair, mutualFriendsData) =>
@@ -70,7 +82,8 @@ object TriadicClosureApp {
       }
     }
 
-    // Print the results to the console
+    // Add a print to check if the triadic closure results are generated
+    println("Triadic closure results:")
     triadicClosureRDD.collect().foreach(println)
 
     // Save the output to HDFS as a single file
