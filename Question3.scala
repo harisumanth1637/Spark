@@ -4,7 +4,7 @@ import scala.collection.mutable.ListBuffer
 
 object MutualFriendsApp {
 
-  val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/input1.txt"
+  val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example.txt"
   val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder"
 
   val conf = new SparkConf().setAppName("MutualFriendsMapReduce").setMaster("local[*]")
