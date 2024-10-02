@@ -1,6 +1,6 @@
 import org.apache.spark.{SparkConf, SparkContext}
 
-object FOFApp {
+object FofApp {
 
   def main(args: Array[String]): Unit = {
 
@@ -12,8 +12,9 @@ object FOFApp {
     val startTime = System.currentTimeMillis()
 
     // Hardcoded input and output paths
-    val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example2.txt"
+    val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example.txt"
     val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder"
+    val part3OutputHDFS = "hdfs://localhost:9000/user/hthtd/Part_3"
 
     // Step 1: Read input data from HDFS
     val loadfile = sc.textFile(inputHDFS)
@@ -49,10 +50,38 @@ object FOFApp {
       val potentialFriendsList = filteredFriends.toList.sorted.mkString(",")
       s"$person\t$potentialFriendsList"
     }
+
+    // Step 5: Print the output to the console
     outputRDD.foreach(println)
 
-    // Step 5: Save the output to HDFS
-    outputRDD.coalesce(1).saveAsTextFile(outputHDFS)
+    // Step 6: Save the output to HDFS
+    outputRDD.saveAsTextFile(outputHDFS)
+
+    // -------- Additional functionality to find pairs of users sharing mutual friends of friends --------
+
+    // Step 7: Find pairs of users sharing friends of friends
+    val pairsRDD = friendsOfFriendsRDD.cartesian(friendsOfFriendsRDD)
+      .filter { case ((personA, foafA), (personB, foafB)) =>
+        personA < personB // Ensure uniqueness of pairs
+      }
+      .map { case ((personA, foafA), (personB, foafB)) =>
+        val sharedFoaf = foafA intersect foafB
+        ((personA, personB), sharedFoaf.size)
+      }
+      .filter { case (_, sharedCount) =>
+        sharedCount > 10 && sharedCount < 100 // Filter by shared friends count
+      }
+
+    // Step 8: Format pairs output
+    val pairsOutputRDD = pairsRDD.map { case ((personA, personB), sharedCount) =>
+      s"($personA, $personB) -> $sharedCount shared friends of friends"
+    }
+
+    // Step 9: Print pairs output to console
+    pairsOutputRDD.foreach(println)
+
+    // Step 10: Save the pairs output to HDFS
+    pairsOutputRDD.saveAsTextFile(part3OutputHDFS)
 
     // Record end time in milliseconds
     val endTime = System.currentTimeMillis()
