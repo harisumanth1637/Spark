@@ -12,6 +12,9 @@ object MutualFriendsApp {
 
   def main(args: Array[String]): Unit = {
 
+    // Start time measurement
+    val startTime = System.nanoTime()
+
     val loadfile: RDD[String] = sc.textFile(inputHDFS)
 
     val userFriendsRDD: RDD[(String, Set[String])] = loadfile.flatMap { line =>
@@ -57,10 +60,6 @@ object MutualFriendsApp {
 
     val aggregatedMutualFriends: RDD[(String, Set[String])] = mutualFriendsPairsRDD.reduceByKey(_ ++ _)
 
-    aggregatedMutualFriends.collect().foreach { case (pair, mutualFriends) =>
-      println(s"$pair -> ${mutualFriends.mkString(", ")}")
-    }
-
     val userMutualFriendsCountRDD: RDD[(String, Int)] = aggregatedMutualFriends.flatMap { case (pair, mutualFriends) =>
       val users = pair.split(",")
       val userA = users(0)
@@ -73,11 +72,17 @@ object MutualFriendsApp {
       .sortBy(_._2, ascending = false)
       .take(10)
 
+    // Final output print
     topUsers.zipWithIndex.foreach { case ((user, count), rank) =>
       println(s"Rank ${rank + 1}: User $user ($count mutual friends)")
     }
 
     aggregatedMutualFriends.saveAsTextFile(outputHDFS)
+
+    // End time measurement
+    val endTime = System.nanoTime()
+    val duration = (endTime - startTime) / 1e9d // Convert from nanoseconds to seconds
+    println(s"Task completed in $duration seconds")
 
     sc.stop()
   }
