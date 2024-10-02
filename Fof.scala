@@ -1,6 +1,6 @@
 import org.apache.spark.{SparkConf, SparkContext}
 
-object FriendsRecommendationApp {
+object FOFApp {
 
   def main(args: Array[String]): Unit = {
 
