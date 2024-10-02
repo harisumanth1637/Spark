@@ -72,7 +72,7 @@ object TriadicClosureApp {
 
     // Step 6: Print the results to the console
     val results = triadicClosureResults.collect()
-    results.foreach(println)
+    //results.foreach(println)
 
     // Step 7: Save the output to HDFS
     sc.parallelize(results).coalesce(1).saveAsTextFile(outputHDFS)
