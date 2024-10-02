@@ -71,7 +71,7 @@ object TriadicClosureApp {
     }
 
     // Print the results to the console
-    triadicClosureRDD.foreach(println)
+    triadicClosureRDD.collect().foreach(println)
 
     // Save the output to HDFS as a single file
     triadicClosureRDD.coalesce(1).saveAsTextFile(outputHDFS)
