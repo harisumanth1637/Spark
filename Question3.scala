@@ -12,7 +12,6 @@ object MutualFriendsApp {
 
   def main(args: Array[String]): Unit = {
 
-    // Start time measurement
     val startTime = System.nanoTime()
 
     val loadfile: RDD[String] = sc.textFile(inputHDFS)
@@ -72,16 +71,22 @@ object MutualFriendsApp {
       .sortBy(_._2, ascending = false)
       .take(10)
 
-    // Final output print
+    // Print topUsers to console
+    println("\nTop Users with the Highest Mutual Friends:")
     topUsers.zipWithIndex.foreach { case ((user, count), rank) =>
       println(s"Rank ${rank + 1}: User $user ($count mutual friends)")
     }
 
-    aggregatedMutualFriends.saveAsTextFile(outputHDFS)
+    // Save topUsers to outputHDFS
+    val topUsersRDD: RDD[String] = sc.parallelize(topUsers.map { case (user, count) =>
+      s"User $user: $count mutual friends"
+    })
+
+    topUsersRDD.saveAsTextFile(outputHDFS)
 
     // End time measurement
     val endTime = System.nanoTime()
-    val duration = (endTime - startTime) / 1e9d // Convert from nanoseconds to seconds
+    val duration = (endTime - startTime) / 1e9d
     println(s"Task completed in $duration seconds")
 
     sc.stop()
