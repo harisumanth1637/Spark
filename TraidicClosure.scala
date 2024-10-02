@@ -61,7 +61,8 @@ object TriadicClosureApp {
       val isDirectlyConnected = friendsOfB.contains(friendC)
 
       if (!isDirectlyConnected) {
-        Some(s"($mutualFriends.mkString(", "), $friendB, $friendC) -> Triadic closure not satisfied ($friendB and $friendC are not connected)")
+        // Correct the output formatting here
+        Some(s"(${mutualFriends.mkString(", ")}, $friendB, $friendC) -> Triadic closure not satisfied ($friendB and $friendC are not connected)")
       } else {
         None
       }
