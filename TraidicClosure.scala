@@ -9,8 +9,8 @@ object TriadicClosureApp {
     val sc = new SparkContext(conf)
 
     // Hardcoded input and output paths
-    val inputHDFS = "hdfs://localhost:9000/user/gs37r/InputFolder/input1.txt"
-    val outputHDFS = "hdfs://localhost:9000/user/gs37r/OutputFolder"
+    val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example.txt"
+    val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder"
 
     // Step 1: Read input data from HDFS
     val loadfile = sc.textFile(inputHDFS)
