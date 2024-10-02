@@ -52,7 +52,7 @@ object FofApp {
     }
 
     // Step 5: Print the output to the console
-    outputRDD.foreach(println)
+    //outputRDD.foreach(println)
 
     // Step 6: Save the output to HDFS
     outputRDD.saveAsTextFile(outputHDFS)
