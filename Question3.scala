@@ -82,7 +82,7 @@ object MutualFriendsApp {
       s"User $user: $count mutual friends"
     })
 
-    topUsersRDD.saveAsTextFile(outputHDFS)
+    topUsersRDD.coalesce(1).saveAsTextFile(outputHDFS)
 
     // End time measurement
     val endTime = System.nanoTime()
