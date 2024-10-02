@@ -9,7 +9,7 @@ object MutualFriendsApp extends App {
 class MutualFriends {
 
   // Define input and output HDFS paths
-  val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example.txt"
+  val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/soc-LiveJournal1Adj.txt"
   val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder"
 
   // Initialize Spark context
