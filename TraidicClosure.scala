@@ -39,7 +39,7 @@ object TriadicClosureApp {
     }
 
     // Generate user pairs and record mutual friends
-    val friendPairsRDD: RDD[(String, Int)] = userFriendsRDD.flatMap { case (userA, friends) =>
+    val friendPairsRDD: RDD[(String, (Int, List[Int]))] = userFriendsRDD.flatMap { case (userA, friends) =>
       for {
         i <- friends.indices
         j <- i + 1 until friends.length
@@ -47,29 +47,31 @@ object TriadicClosureApp {
         val friendB = friends(i)
         val friendC = friends(j)
         val pair = createSortedKey(friendB, friendC)
-        (pair, userA)
+        (pair, (userA, friends))
       }
     }
 
     // Group by friend pairs and find mutual friends
-    val mutualFriendsRDD: RDD[(String, Iterable[Int])] = friendPairsRDD.groupByKey()
+    val mutualFriendsRDD: RDD[(String, Iterable[(Int, List[Int])])] = friendPairsRDD.groupByKey()
 
     // Check for triadic closure by ensuring mutual friends are also directly connected
-    val triadicClosureRDD: RDD[String] = mutualFriendsRDD.flatMap { case (pair, mutualFriends) =>
+    val triadicClosureRDD: RDD[String] = mutualFriendsRDD.flatMap { case (pair, mutualFriendsData) =>
       val friends = pair.split(",")
       val friendB = friends(0).toInt
       val friendC = friends(1).toInt
-      val mutualFriendSet = mutualFriends.toSet
 
-      // Check if B and C are directly connected by looking in mutual friends
-      val isDirectlyConnected = mutualFriendSet.exists(friend => (friend == friendB) || (friend == friendC))
-
-      if (!isDirectlyConnected) {
-        Some(s"Triadic closure not satisfied for pair ($friendB, $friendC) with mutual friends: ${mutualFriendSet.mkString(", ")}")
-      } else {
-        None
+      // For each mutual friend, check if friendB and friendC are directly connected
+      mutualFriendsData.flatMap { case (userA, friendsOfA) =>
+        if (!friendsOfA.contains(friendB) || !friendsOfA.contains(friendC)) {
+          Some(s"($userA, $friendB, $friendC) -> Triadic closure not satisfied ($friendB and $friendC are not connected)")
+        } else {
+          None
+        }
       }
     }
+
+    // Print the results to the console
+    triadicClosureRDD.foreach(println)
 
     // Save the output to HDFS as a single file
     triadicClosureRDD.coalesce(1).saveAsTextFile(outputHDFS)
