@@ -51,7 +51,7 @@ object FriendsRecommendationApp {
     }
 
     // Step 5: Save the output to HDFS
-    outputRDD.saveAsTextFile(outputHDFS)
+    outputRDD.coalesce(1).saveAsTextFile(outputHDFS)
 
     // Record end time in milliseconds
     val endTime = System.currentTimeMillis()
