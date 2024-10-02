@@ -1,6 +1,5 @@
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.rdd.RDD
-import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
 // Initialize Spark context
@@ -29,38 +28,53 @@ val userFriendsRDD: RDD[(String, Set[String])] = loadfile.map { line =>
 }
 println("Parsed user friends data")
 
-// Step 3: Create user pairs and compute mutual friends
+// Step 3: Collect the user-friends map and broadcast it
+val userFriendsMap = userFriendsRDD.collectAsMap()
+val userFriendsBroadcast = sc.broadcast(userFriendsMap)
+println("Broadcasted user friends map")
+
+// Step 4: Split into multiple parts for clarity
+
+// Part 4.1: Define a helper function to generate the user pair key
+def generateUserPairKey(userA: String, userB: String): String = {
+  if (userA < userB) s"$userA,$userB" else s"$userB,$userA"
+}
+
+// Part 4.2: Define a helper function to compute mutual friends for a pair of users
+def computeMutualFriends(friendsOfA: Set[String], userB: String, userFriendsMap: Map[String, Set[String]]): Set[String] = {
+  val friendsOfB = userFriendsMap.getOrElse(userB, Set.empty) // Get friends of userB
+  val mutualFriends = friendsOfA intersect friendsOfB // Find mutual friends
+  mutualFriends - userB // Remove userB from the mutual friends
+}
+
+// Part 4.3: Iterate over each user and their friends, generate pairs, and compute mutual friends
 val mutualFriendsPairsRDD: RDD[(String, Set[String])] = userFriendsRDD.flatMap { case (userA, friendsOfA) =>
   val pairs = ListBuffer[(String, Set[String])]()
-  
-  // Create user pairs and calculate mutual friends
-  for (userB <- friendsOfA) {
-    // Ensure A < B for consistent ordering of user pairs
-    val userPairKey = if (userA < userB) s"$userA,$userB" else s"$userB,$userA"
-    val mutualFriends = friendsOfA intersect userFriendsRDD.lookup(userB).headOption.getOrElse(Set.empty)
-    
-    // Remove self from mutual friends
-    val cleanedMutualFriends = mutualFriends - userA - userB
+  val userFriendsMapBroadcast = userFriendsBroadcast.value // Access the broadcast variable
 
-    if (cleanedMutualFriends.nonEmpty) {
-      pairs += ((userPairKey, cleanedMutualFriends))
+  // Iterate over friendsOfA to form pairs and compute mutual friends
+  for (userB <- friendsOfA) {
+    val userPairKey = generateUserPairKey(userA, userB) // Generate the user pair key
+    val mutualFriends = computeMutualFriends(friendsOfA, userB, userFriendsMapBroadcast) // Compute mutual friends
+    if (mutualFriends.nonEmpty) {
+      pairs += ((userPairKey, mutualFriends)) // Add the result to the pairs buffer
     }
   }
   pairs
 }
 println("Computed mutual friends for user pairs")
 
-// Step 4: Aggregate mutual friends for each user pair
+// Step 5: Aggregate mutual friends for each user pair
 val aggregatedMutualFriends: RDD[(String, Set[String])] = mutualFriendsPairsRDD.reduceByKey(_ ++ _)
 println("Aggregated mutual friends for each user pair")
 
-// Step 5: Output the mutual friends result
+// Step 6: Output the mutual friends result
 println("Map Output (Mutual Friends):")
 aggregatedMutualFriends.collect().foreach { case (pair, mutualFriends) =>
   println(s"$pair -> ${mutualFriends.mkString(", ")}")
 }
 
-// Step 6: Compute the top users based on mutual friend count
+// Step 7: Compute the top users based on mutual friend count
 val userMutualFriendsCountRDD: RDD[(String, Int)] = aggregatedMutualFriends.flatMap { case (pair, mutualFriends) =>
   val users = pair.split(",")
   val userA = users(0)
@@ -71,7 +85,7 @@ val userMutualFriendsCountRDD: RDD[(String, Int)] = aggregatedMutualFriends.flat
   .reduceByKey(_ + _)
 println("Computed mutual friends count for each user")
 
-// Step 7: Sort the users by mutual friends count in descending order and get the top 10
+// Step 8: Sort the users by mutual friends count in descending order and get the top 10
 val topUsers: Array[(String, Int)] = userMutualFriendsCountRDD
   .sortBy(_._2, ascending = false)
   .take(10)
@@ -81,10 +95,10 @@ topUsers.zipWithIndex.foreach { case ((user, count), rank) =>
   println(s"Rank ${rank + 1}: User $user ($count mutual friends)")
 }
 
-// Step 8: Save the results to HDFS
+// Step 9: Save the results to HDFS
 aggregatedMutualFriends.saveAsTextFile(outputHDFS)
 println(s"Results saved to $outputHDFS")
 
-// Step 9: Stop the Spark context
+// Step 10: Stop the Spark context
 sc.stop()
 println("Spark context stopped")
