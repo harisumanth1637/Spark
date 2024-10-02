@@ -1,4 +1,9 @@
-println(s"Executor Memory: ${sc.getConf.get("spark.executor.memory")}")
-println(s"Driver Memory: ${sc.getConf.get("spark.driver.memory")}")
-println(s"Executor Cores: ${sc.getConf.get("spark.executor.cores")}")
-println(s"Number of Executors: ${sc.getConf.get("spark.executor.instances")}")
+val executorMemory = sc.getConf.getOption("spark.executor.memory").getOrElse("Default not set")
+val driverMemory = sc.getConf.getOption("spark.driver.memory").getOrElse("Default not set")
+val executorCores = sc.getConf.getOption("spark.executor.cores").getOrElse("Default not set")
+val numExecutors = sc.getConf.getOption("spark.executor.instances").getOrElse("Default not set")
+
+println(s"Executor Memory: $executorMemory")
+println(s"Driver Memory: $driverMemory")
+println(s"Executor Cores: $executorCores")
+println(s"Number of Executors: $numExecutors")
