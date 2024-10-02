@@ -1,102 +1,74 @@
 import org.apache.spark.{SparkConf, SparkContext}
-import org.apache.spark.rdd.RDD
 
 object TriadicClosureApp {
 
-  val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example.txt"
-  val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder"
-
-  val conf = new SparkConf().setAppName("TriadicClosure").setMaster("local[*]")
-  val sc = new SparkContext(conf)
-
   def main(args: Array[String]): Unit = {
 
-    // Start time in milliseconds
-    val startTime = System.currentTimeMillis()
+    // Initialize Spark Context
+    val conf = new SparkConf().setAppName("TriadicClosure").setMaster("local[*]")
+    val sc = new SparkContext(conf)
 
-    // Load the input file from HDFS
-    val loadfile: RDD[String] = sc.textFile(inputHDFS)
+    // Hardcoded input and output paths
+    val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example.txt"
+    val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder"
 
-    // Parse input and create an RDD of (user, friendsList)
-    val userFriendsRDD: RDD[(Int, List[Int])] = loadfile.flatMap { line =>
+    // Step 1: Read input data from HDFS
+    val loadfile = sc.textFile(inputHDFS)
+
+    // Step 2: Parse input into user-friends relationships
+    val userFriendsRDD = loadfile.flatMap { line =>
       val parts = line.split("\t")
       if (parts.length == 2) {
         val user = parts(0).trim.toInt
         val friends = parts(1).split(",").map(_.trim.toInt).toList
-        if (user > 0 && friends.nonEmpty) {
-          Some((user, friends))
-        } else {
-          None
-        }
+        Some((user, friends))
       } else {
         None
       }
     }
 
-    // Add a print to ensure the data is correctly parsed
-    println("Parsed userFriendsRDD:")
-    userFriendsRDD.take(10).foreach(println)
-
-    // Function to generate sorted user pair key
-    def createSortedKey(friendA: Int, friendB: Int): String = {
-      if (friendA < friendB) s"$friendA,$friendB" else s"$friendB,$friendA"
-    }
-
-    // Generate user pairs and record mutual friends
-    val friendPairsRDD: RDD[(String, (Int, List[Int]))] = userFriendsRDD.flatMap { case (userA, friends) =>
+    // Step 3: Generate pairs of friends (B, C) and associate the user (A) as the mutual friend
+    val friendPairsRDD = userFriendsRDD.flatMap { case (userA, friends) =>
       for {
         i <- friends.indices
         j <- i + 1 until friends.length
       } yield {
         val friendB = friends(i)
         val friendC = friends(j)
-        val pair = createSortedKey(friendB, friendC)
-        (pair, (userA, friends))
+        val pair = if (friendB < friendC) s"$friendB,$friendC" else s"$friendC,$friendB"
+        (pair, userA)
       }
     }
 
-    // Add a print to check if pairs are being generated correctly
-    println("Generated friendPairsRDD:")
-    friendPairsRDD.take(10).foreach(println)
+    // Step 4: Group by pairs of friends to collect all mutual friends
+    val groupedPairsRDD = friendPairsRDD.groupByKey()
 
-    // Group by friend pairs and find mutual friends
-    val mutualFriendsRDD: RDD[(String, Iterable[(Int, List[Int])])] = friendPairsRDD.groupByKey()
-
-    // Add a print to check if grouping is working
-    println("Grouped mutualFriendsRDD:")
-    mutualFriendsRDD.take(10).foreach(println)
-
-    // Check for triadic closure by ensuring mutual friends are also directly connected
-    val triadicClosureRDD: RDD[String] = mutualFriendsRDD.flatMap { case (pair, mutualFriendsData) =>
+    // Step 5: Check if the triadic closure is satisfied
+    val triadicClosureResults = groupedPairsRDD.flatMap { case (pair, mutualFriends) =>
       val friends = pair.split(",")
       val friendB = friends(0).toInt
       val friendC = friends(1).toInt
 
-      // For each mutual friend, check if friendB and friendC are directly connected
-      mutualFriendsData.flatMap { case (userA, friendsOfA) =>
-        if (!friendsOfA.contains(friendB) || !friendsOfA.contains(friendC)) {
-          Some(s"($userA, $friendB, $friendC) -> Triadic closure not satisfied ($friendB and $friendC are not connected)")
-        } else {
-          None
-        }
+      // Check if B and C are directly connected by looking into the global user-friends network
+      val isDirectlyConnected = userFriendsRDD.filter { case (user, friendsOfUser) =>
+        (user == friendB && friendsOfUser.contains(friendC)) || (user == friendC && friendsOfUser.contains(friendB))
+      }.isEmpty()  // True if no direct connection exists between B and C
+
+      if (isDirectlyConnected) {
+        Some(s"($mutualFriends.mkString(", "), $friendB, $friendC) -> Triadic closure not satisfied ($friendB and $friendC are not connected)")
+      } else {
+        None
       }
     }
 
-    // Add a print to check if the triadic closure results are generated
-    println("Triadic closure results:")
-    triadicClosureRDD.collect().foreach(println)
+    // Step 6: Print the results to the console
+    val results = triadicClosureResults.collect()
+    results.foreach(println)
 
-    // Save the output to HDFS as a single file
-    triadicClosureRDD.coalesce(1).saveAsTextFile(outputHDFS)
+    // Step 7: Save the output to HDFS
+    sc.parallelize(results).coalesce(1).saveAsTextFile(outputHDFS)
 
-    // End time in milliseconds
-    val endTime = System.currentTimeMillis()
-
-    // Calculate and print the duration in milliseconds
-    val duration = endTime - startTime
-    println(s"Task completed in $duration milliseconds")
-
-    // Stop the Spark context
+    // Stop the Spark Context
     sc.stop()
   }
 }
