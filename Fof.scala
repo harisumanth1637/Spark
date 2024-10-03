@@ -55,7 +55,7 @@ object FofApp {
     outputRDD.map { case (person, potentialFriends) =>
       val potentialFriendsList = potentialFriends.toList.sorted.mkString(",")
       s"$person\t$potentialFriendsList"
-    }.saveAsTextFile(outputHDFS)
+    }.coalesce(1).saveAsTextFile(outputHDFS)
 
     // Record end time in milliseconds
     val endTime = System.currentTimeMillis()
@@ -92,7 +92,7 @@ object FofApp {
     //pairsOutputRDD.foreach(println)
 
     // Step 10: Save the pairs output to HDFS
-    pairsOutputRDD.saveAsTextFile(part3OutputHDFS)
+    pairsOutputRDD.coalesce(1).saveAsTextFile(part3OutputHDFS)
 
 
 
