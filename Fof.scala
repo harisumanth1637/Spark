@@ -6,6 +6,10 @@ object FofApp {
 
     // Initialize Spark Context
     val conf = new SparkConf().setAppName("FriendsRecommendation").setMaster("local[*]")
+    
+    // Set broadcast threshold to 100 MB
+    conf.set("spark.sql.autoBroadcastJoinThreshold", (100 * 1024 * 1024).toString) // 100 MB threshold
+
     val sc = new SparkContext(conf)
 
     // Record start time in milliseconds
@@ -31,10 +35,13 @@ object FofApp {
       }
     }.collectAsMap()
 
-    // Step 3: Map Phase - Find friends of friends
+    // Broadcast the friendsMapRDD
+    val broadcastFriendsMap = sc.broadcast(friendsMapRDD)
+
+    // Step 3: Map Phase - Find friends of friends using the broadcasted friends map
     val friendsOfFriendsRDD = sc.parallelize(friendsMapRDD.toSeq).flatMap { case (person, friends) =>
       val friendsOfFriends = friends.flatMap { friend =>
-        friendsMapRDD.get(friend) match {
+        broadcastFriendsMap.value.get(friend) match {
           case Some(friendsOfFriend) =>
             friendsOfFriend.filter(foaf => foaf != person && !friends.contains(foaf))
           case None => List.empty[Int]
@@ -45,13 +52,12 @@ object FofApp {
 
     // Step 4: Reduce Phase - Filter out direct friends and prepare the output format
     val outputRDD = friendsOfFriendsRDD.map { case (person, potentialFriends) =>
-      val directFriends = friendsMapRDD.getOrElse(person, List())
+      val directFriends = broadcastFriendsMap.value.getOrElse(person, List())
       val filteredFriends = potentialFriends -- directFriends
-      (person, filteredFriends)  // Now we return the user and their filtered friends of friends set
+      (person, filteredFriends)  // Return the user and their filtered friends of friends set
     }
 
-
-    // Step 6: Save the output to HDFS
+    // Save the output to HDFS
     outputRDD.map { case (person, potentialFriends) =>
       val potentialFriendsList = potentialFriends.toList.sorted.mkString(",")
       s"$person\t$potentialFriendsList"
@@ -59,37 +65,33 @@ object FofApp {
 
     // Record end time in milliseconds
     val endTime = System.currentTimeMillis()
-
-    // Calculate and print the duration
     val duration = endTime - startTime
     println(s"Task completed in $duration milliseconds")
-    
-    // Step 7: Find shared "friends of friends" who are not direct friends between two users
-    val pairsRDD = outputRDD.cartesian(outputRDD) // Cartesian product of the user-potential friends sets
-      .filter { case ((personA, _), (personB, _)) => 
-        personA < personB // Avoid duplicate pairs (A, B) and (B, A)
-      }
-      .map { case ((personA, foafA), (personB, foafB)) =>
+
+    // Step 7: Broadcasting outputRDD in Step 7
+    val broadcastOutputRDD = sc.broadcast(outputRDD.collectAsMap()) 
+
+    // Find shared "friends of friends" who are not direct friends between two users
+    val pairsRDD = outputRDD.flatMap { case (personA, foafA) =>
+      broadcastOutputRDD.value.collect { case (personB, foafB) if personA < personB =>
         val sharedFoaf = foafA.intersect(foafB) // Find the shared "friends of friends"
-        val directFriendsA = friendsMapRDD.getOrElse(personA, List()).toSet
-        val directFriendsB = friendsMapRDD.getOrElse(personB, List()).toSet
+        val directFriendsA = broadcastFriendsMap.value.getOrElse(personA, List()).toSet
+        val directFriendsB = broadcastFriendsMap.value.getOrElse(personB, List()).toSet
 
         // Ensure the shared friends of friends are not direct friends for both users
         val validSharedFoaf = sharedFoaf.filter(foaf => !directFriendsA.contains(foaf) && !directFriendsB.contains(foaf))
 
         ((personA, personB), validSharedFoaf.size)
       }
-      .filter { case (_, sharedCount) =>
-        sharedCount > 10 && sharedCount < 100 // Filter for valid pairs where the count is between 10 and 100
-      }
+    }
+    .filter { case (_, sharedCount) =>
+      sharedCount > 10 && sharedCount < 100 // Filter for valid pairs where the count is between 10 and 100
+    }
 
     // Step 8: Format pairs output
     val pairsOutputRDD = pairsRDD.map { case ((personA, personB), sharedCount) =>
       s"($personA, $personB) -> $sharedCount shared friends of friends"
     }
-
-    // Step 9: Print pairs output to console
-    //pairsOutputRDD.foreach(println)
 
     // Step 10: Save the pairs output to HDFS
     pairsOutputRDD.coalesce(1).saveAsTextFile(part3OutputHDFS)
