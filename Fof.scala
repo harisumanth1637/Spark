@@ -47,29 +47,40 @@ object FofApp {
     val outputRDD = friendsOfFriendsRDD.map { case (person, potentialFriends) =>
       val directFriends = friendsMapRDD.getOrElse(person, List())
       val filteredFriends = potentialFriends -- directFriends
-      val potentialFriendsList = filteredFriends.toList.sorted.mkString(",")
-      s"$person\t$potentialFriendsList"
+      (person, filteredFriends)  // Now we return the user and their filtered friends of friends set
     }
 
-    // Step 5: Print the output to the console
-    //outputRDD.foreach(println)
 
     // Step 6: Save the output to HDFS
-    outputRDD.saveAsTextFile(outputHDFS)
+    outputRDD.map { case (person, potentialFriends) =>
+      val potentialFriendsList = potentialFriends.toList.sorted.mkString(",")
+      s"$person\t$potentialFriendsList"
+    }.saveAsTextFile(outputHDFS)
 
-    // -------- Additional functionality to find pairs of users sharing mutual friends of friends --------
+    // Record end time in milliseconds
+    val endTime = System.currentTimeMillis()
 
-    // Step 7: Find pairs of users sharing friends of friends
-    val pairsRDD = friendsOfFriendsRDD.cartesian(friendsOfFriendsRDD)
-      .filter { case ((personA, foafA), (personB, foafB)) =>
-        personA < personB // Ensure uniqueness of pairs
+    // Calculate and print the duration
+    val duration = endTime - startTime
+    println(s"Task completed in $duration milliseconds")
+    
+    // Step 7: Find shared "friends of friends" who are not direct friends between two users
+    val pairsRDD = outputRDD.cartesian(outputRDD) // Cartesian product of the user-potential friends sets
+      .filter { case ((personA, _), (personB, _)) => 
+        personA < personB // Avoid duplicate pairs (A, B) and (B, A)
       }
       .map { case ((personA, foafA), (personB, foafB)) =>
-        val sharedFoaf = foafA intersect foafB
-        ((personA, personB), sharedFoaf.size)
+        val sharedFoaf = foafA.intersect(foafB) // Find the shared "friends of friends"
+        val directFriendsA = friendsMapRDD.getOrElse(personA, List()).toSet
+        val directFriendsB = friendsMapRDD.getOrElse(personB, List()).toSet
+
+        // Ensure the shared friends of friends are not direct friends for both users
+        val validSharedFoaf = sharedFoaf.filter(foaf => !directFriendsA.contains(foaf) && !directFriendsB.contains(foaf))
+
+        ((personA, personB), validSharedFoaf.size)
       }
       .filter { case (_, sharedCount) =>
-        sharedCount > 10 && sharedCount < 100 // Filter by shared friends count
+        sharedCount > 10 && sharedCount < 100 // Filter for valid pairs where the count is between 10 and 100
       }
 
     // Step 8: Format pairs output
@@ -78,17 +89,12 @@ object FofApp {
     }
 
     // Step 9: Print pairs output to console
-    pairsOutputRDD.foreach(println)
+    //pairsOutputRDD.foreach(println)
 
     // Step 10: Save the pairs output to HDFS
     pairsOutputRDD.saveAsTextFile(part3OutputHDFS)
 
-    // Record end time in milliseconds
-    val endTime = System.currentTimeMillis()
 
-    // Calculate and print the duration
-    val duration = endTime - startTime
-    println(s"Task completed in $duration milliseconds")
 
     // Stop the Spark Context
     sc.stop()
