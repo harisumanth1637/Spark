@@ -1,18 +1,20 @@
-import org.apache.spark.SparkContext
+import org.apache.spark.{SparkConf, SparkContext}
 
 object TriadicClosureApp {
 
   def main(args: Array[String]): Unit = {
 
+    // Initialize Spark Context
+    val conf = new SparkConf().setAppName("TriadicClosure").setMaster("local[*]")
+    val sc = new SparkContext(conf)
+
     // Record start time in milliseconds
     val startTime = System.currentTimeMillis()
 
     // Hardcoded input and output paths
-    val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/soc-LiveJournal1Adj.txt"
+    val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example.txt"
     val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder"
-    val highMutualFriendsOutputHDFS = "hdfs://localhost:9000/user/hthtd/Output_Part3"
-
-    val sc = SparkContext.getOrCreate()
+    val highMutualFriendsOutputHDFS = "hdfs://localhost:9000/user/hthtd/HighMutualFriendsOutputFolder"
 
     // Step 1: Read input data from HDFS
     val loadfile = sc.textFile(inputHDFS)
@@ -88,5 +90,8 @@ object TriadicClosureApp {
     // Calculate and print the duration
     val duration = endTime - startTime
     println(s"Task completed in $duration milliseconds")
+
+    // Stop the Spark Context
+    sc.stop()
   }
 }
