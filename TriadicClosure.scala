@@ -1,12 +1,8 @@
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.SparkContext
 
 object TriadicClosureApp {
 
   def main(args: Array[String]): Unit = {
-
-    // Initialize Spark Context
-    val conf = new SparkConf().setAppName("TriadicClosure").setMaster("local[*]")
-    val sc = new SparkContext(conf)
 
     // Record start time in milliseconds
     val startTime = System.currentTimeMillis()
@@ -14,6 +10,9 @@ object TriadicClosureApp {
     // Hardcoded input and output paths
     val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example.txt"
     val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder"
+    val highMutualFriendsOutputHDFS = "hdfs://localhost:9000/user/hthtd/Output_Part3"
+
+    val sc = SparkContext.getOrCreate()
 
     // Step 1: Read input data from HDFS
     val loadfile = sc.textFile(inputHDFS)
@@ -50,7 +49,14 @@ object TriadicClosureApp {
     // Step 4: Group by pairs of friends to collect all mutual friends
     val groupedPairsRDD = friendPairsRDD.groupByKey()
 
-    // Step 5: Check if the triadic closure is satisfied
+    // Step 5: Filter pairs where mutual friends are greater than 50
+    val highMutualFriendsRDD = groupedPairsRDD.filter { case (_, mutualFriends) =>
+      mutualFriends.size > 50
+    }.map { case (pair, mutualFriends) =>
+      s"Pair $pair has ${mutualFriends.size} mutual friends"
+    }
+
+    // Step 6: Check if the triadic closure is satisfied
     val triadicClosureResults = groupedPairsRDD.flatMap { case (pair, mutualFriends) =>
       val friends = pair.split(",")
       val friendB = friends(0).toInt
@@ -70,12 +76,11 @@ object TriadicClosureApp {
       }
     }
 
-    // Step 6: Print the results to the console
-    val results = triadicClosureResults.collect()
-    //results.foreach(println)
+    // Step 7: Save the triadic closure results to HDFS
+    sc.parallelize(triadicClosureResults.collect()).coalesce(1).saveAsTextFile(outputHDFS)
 
-    // Step 7: Save the output to HDFS
-    sc.parallelize(results).coalesce(1).saveAsTextFile(outputHDFS)
+    // Step 8: Save pairs with more than 50 mutual friends to HDFS
+    highMutualFriendsRDD.coalesce(1).saveAsTextFile(highMutualFriendsOutputHDFS)
 
     // Record end time in milliseconds
     val endTime = System.currentTimeMillis()
@@ -83,8 +88,5 @@ object TriadicClosureApp {
     // Calculate and print the duration
     val duration = endTime - startTime
     println(s"Task completed in $duration milliseconds")
-
-    // Stop the Spark Context
-    sc.stop()
   }
 }
