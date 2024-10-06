@@ -9,8 +9,8 @@ object MutualFriendsFilterApp {
     val sc = new SparkContext(conf)
 
     // Hardcoded input and output paths
-    val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example.txt"
-    val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder/Part3"
+    val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/soc-LiveJournal1Adj.txt"
+    val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder_Part3/"
 
     // Step 1: Read input data from HDFS
     val loadfile = sc.textFile(inputHDFS)
