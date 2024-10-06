@@ -8,7 +8,7 @@ object TriadicClosureApp {
     val startTime = System.currentTimeMillis()
 
     // Hardcoded input and output paths
-    val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/example.txt"
+    val inputHDFS = "hdfs://localhost:9000/user/hthtd/InputFolder/soc-LiveJournal1Adj.txt"
     val outputHDFS = "hdfs://localhost:9000/user/hthtd/OutputFolder"
     val highMutualFriendsOutputHDFS = "hdfs://localhost:9000/user/hthtd/Output_Part3"
 
